@@ -20,3 +20,12 @@ export containerId=$(docker ps -l -q)
 xhost +local:`docker inspect --format='{{ .Config.Hostname }}' $containerId`
 docker start -i $containerId
 ```
+
+## Instructions
+
+- To open new terminal once the docker container is running, use the following command.
+
+```
+docker exec -it <container> bash
+```
+
