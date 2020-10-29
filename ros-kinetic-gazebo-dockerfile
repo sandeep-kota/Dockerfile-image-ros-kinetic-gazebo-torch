@@ -1,0 +1,124 @@
+FROM nvidia/cuda:11.0-devel-ubuntu16.04
+
+# FROM ros:kinetic-ros-base
+# e.g. FROM osrf/ros:kinetic-desktop-full
+
+# optional, if the default user is not "root", you might need to switch to root here and at the end of the script to the original user again.
+# e.g.
+# USER root
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        pkg-config \
+        libxau-dev \
+        libxdmcp-dev \
+        libxcb1-dev \
+        libxext-dev \
+        libx11-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# replace with other Ubuntu version if desired
+# see: https://hub.docker.com/r/nvidia/opengl/
+COPY --from=nvidia/opengl:1.2-glvnd-runtime-ubuntu16.04 \
+  /usr/local/lib/x86_64-linux-gnu \
+  /usr/local/lib/x86_64-linux-gnu
+
+# replace with other Ubuntu version if desired
+# see: https://hub.docker.com/r/nvidia/opengl/
+COPY --from=nvidia/opengl:1.2-glvnd-runtime-ubuntu16.04 \
+  /usr/local/share/glvnd/egl_vendor.d/10_nvidia.json \
+  /usr/local/share/glvnd/egl_vendor.d/10_nvidia.json
+
+RUN echo '/usr/local/lib/x86_64-linux-gnu' >> /etc/ld.so.conf.d/glvnd.conf && \
+    ldconfig && \
+    echo '/usr/local/$LIB/libGL.so.1' >> /etc/ld.so.preload && \
+    echo '/usr/local/$LIB/libEGL.so.1' >> /etc/ld.so.preload
+
+# nvidia-container-runtime
+ENV NVIDIA_VISIBLE_DEVICES \
+    ${NVIDIA_VISIBLE_DEVICES:-all}
+ENV NVIDIA_DRIVER_CAPABILITIES \
+    ${NVIDIA_DRIVER_CAPABILITIES:+$NVIDIA_DRIVER_CAPABILITIES,}graphics
+
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends 
+
+# Install pip2
+RUN apt-get install curl
+RUN apt-get install -y wget python-pip python-dev libgtk2.0-0 unzip libblas-dev liblapack-dev libhdf5-dev && \
+    curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    python get-pip.py
+
+# prepare default python 2.7 environment
+RUN pip install matplotlib pandas scipy h5py testresources scikit-learn && \
+    pip install scipy 
+
+# Pytorch python 2.7
+RUN pip install torch torchvision
+
+# Install opencv3.4  
+RUN pip install opencv-python=="3.4.5.20"
+
+RUN apt-get update && \
+    apt-get install -y vim \
+    tmux \
+    git \
+    wget \
+    lsb-release \
+    lsb-core
+
+# Install ROS
+RUN apt-get install -y software-properties-common
+RUN add-apt-repository "deb http://archive.ubuntu.com/ubuntu $(lsb_release -sc) main universe restricted multiverse"
+
+RUN sh -c 'echo "deb http://packages.ros.org/ros/ubuntu `lsb_release -sc` main" > /etc/apt/sources.list.d/ros-latest.list' && \
+    apt-key adv --keyserver 'hkp://keyserver.ubuntu.com:80' --recv-key C1CF6E31E6BADE8868B172B4F42ED6FBAB17C654 && \
+    apt-get update && apt-get install -y ros-kinetic-desktop-full && \
+    apt-get install -y python-rosinstall && \
+    rosdep init && \
+    rosdep update 
+
+RUN /bin/bash -c 'echo "deb http://packages.ros.org/ros/ubuntu `lsb_release -sc` main" > /etc/apt/sources.list.d/ros-latest.list'
+RUN wget http://packages.ros.org/ros.key -O - | apt-key add -
+
+RUN apt-get update
+RUN apt-get install -y python-catkin-tools
+
+# Setup ROS
+RUN rosdep fix-permissions && rosdep update
+RUN mkdir -p ~/catkin_ws/src 
+RUN cd ~/catkin_ws 
+RUN /bin/bash -c 'echo "source /opt/ros/kinetic/setup.bash" >> ~/.bashrc' && \
+    /bin/bash -c "source ~/.bashrc" \
+    /bin/bash -c "catkin_make" &&\
+    catkin init &&\
+    catkin clean 
+
+RUN /bin/bash -c 'echo "source ~/catkin_ws/devel/setup.bash" >> ~/.bashrc'
+
+# Force "python" command to execute "python3"
+RUN /bin/bash -c 'echo "alias python=python3" >> ~/.bashrc'
+
+
+RUN /bin/bash -c "source ~/.bashrc"
+
+
+# Fixed the issue: "Cannot run ros with python3 and cannot import cv2 from python3"
+# This issue is caused by ROS that creates it's own cv2.so file for python 2, and then routes every import request to that file
+RUN cd /usr/local/lib/python3.5/dist-packages 
+RUN ln -s /usr/local/lib/python2.7/dist-packages/cv2.so cv2.so
+RUN cd /opt/ros/kinetic/lib/python2.7/dist-packages
+RUN mv cv2.so backup_cv2.so 
+
+
+RUN pip install future
+
+RUN cd /root/
+
+CMD ["/bin/bash"]
+
+
+
+
+RUN cd /root/
+CMD ["/bin/bash"]
+
+
